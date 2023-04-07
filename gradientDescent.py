@@ -23,7 +23,7 @@ def grad_L(X, y, beta):
 
 
 def eval_L(X, y, beta):
-    return np.average([binary_cross_entropy(y[index],sigmoid(xi @ beta)) for index, xi in enumerate(Xhat(X))])
+    return np.average([binary_cross_entropy(y[index], sigmoid(xi @ beta)) for index, xi in enumerate(Xhat(X))])
 
 
 def train_model_using_grad_descent(X, y, alpha=0.1, max_iter=100):
@@ -31,20 +31,16 @@ def train_model_using_grad_descent(X, y, alpha=0.1, max_iter=100):
     L_vals = []
     for _ in range(max_iter):
         beta = beta - alpha * grad_L(X, y, beta)
-        print(alpha * grad_L(X, y, beta))
-
         L_vals.append(eval_L(X, y, beta))
+
     # create a new figure
     fig, ax = plt.subplots()
-
     # plot the array against its index
     ax.plot(L_vals)
-
     # set the title and labels
     ax.set_title('Array plot')
     ax.set_xlabel('Index')
     ax.set_ylabel('Value')
-
     # show the plot
     plt.show()
     return beta
@@ -61,7 +57,7 @@ if __name__ == '__main__':
     X_train = (X_train - mean) / s
     X_val = (X_val - mean) / s
 
-    beta = train_model_using_grad_descent(X_train, y_train, alpha=0.01, max_iter=500)
+    beta = train_model_using_grad_descent(X_train, y_train, alpha=0.01, max_iter=50)
     y_pred = [1 if _ > 0.5 else 0 for _ in sigmoid(Xhat(X_val) @ beta)]
 
     acc = np.average(y_pred == y_val)
