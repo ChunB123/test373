@@ -1,3 +1,4 @@
+from tqdm import tqdm
 import numpy as np
 import sklearn as sk
 import pandas as pd
@@ -8,11 +9,34 @@ import random
 
 
 def sigmoid(u):
-    return 1 / (1 + np.exp(-u))
+    if isinstance(u, (int, float)):
+        if u >= 0:
+            return 1.0 / (1.0 + np.exp(-u))
+        else:
+            return np.exp(u) / (1.0 + np.exp(u))
+    else:
+        # use identity to prevent overflow
+        positive_mask = u >= 0
+        output = np.array([0 for x in range(len(u))]).astype("float64")
+        output[positive_mask] = 1 / (1 + np.exp(-u[positive_mask]))
+        output[~positive_mask] = np.exp(u[~positive_mask]) / (1 + np.exp(u[~positive_mask]))
+        return output
 
 
-def binary_cross_entropy(p, q):
+def softmax(u):
+    # return np.exp(u) / np.sum(np.exp(u))
+    # use log_softmax instead to prevent overflow
+    return np.exp(u - np.max(u) - np.log(np.sum(np.exp(u - np.max(u)))))
+
+
+def binary_cross_entropy(p, q, eps=1e-10):
+    q = np.clip(q, eps, 1 - eps)
     return -p * np.log(q) - (1 - p) * np.log(1 - q)
+
+
+def cross_entropy(p, q, eps=1e-10):
+    q = np.clip(q, eps, 1 - eps)
+    return -p @ np.log(q)
 
 
 def Xhat(X):
@@ -31,10 +55,31 @@ def eval_L(X, y, beta):
     return np.average([binary_cross_entropy(y[index], sigmoid(xi @ beta)) for index, xi in enumerate(Xhat(X))])
 
 
+def grad_L_m(X, y, beta):
+    if len(X.shape) == 1:
+        return np.outer(Xhat(X), (softmax(Xhat(X) @ beta) - y))
+
+
+def eval_L_m(X, y, beta):
+    return np.average([cross_entropy(y[index], sigmoid(xi @ beta)) for index, xi in enumerate(Xhat(X))])
+
+
+def train_model_using_stochastic_grad_descent_multi(X, y, alpha=0.1, epoch=500):
+    beta = np.zeros((X.shape[1] + 1, y.shape[1])).astype("float64")
+    L_vals = []
+    for _ in tqdm(range(epoch)):
+        indexList = random.sample(range(X.shape[0]), X.shape[0])
+        for i in indexList:
+            beta = beta - alpha * grad_L_m(X[i], y[i], beta)
+        # use cross-entropy
+        L_vals.append(eval_L_m(X, y, beta))
+    return beta, L_vals
+
+
 def train_model_using_grad_descent(X, y, alpha=0.1, max_iter=100):
     beta = np.zeros(X.shape[1] + 1)
     L_vals = []
-    for _ in range(max_iter):
+    for _ in tqdm(range(max_iter)):
         beta = beta - alpha * grad_L(X, y, beta)
         L_vals.append(eval_L(X, y, beta))
     return beta, L_vals
@@ -43,7 +88,7 @@ def train_model_using_grad_descent(X, y, alpha=0.1, max_iter=100):
 def train_model_using_stochastic_grad_descent(X, y, alpha=0.1, epoch=500):
     beta = np.zeros(X.shape[1] + 1)
     L_vals = []
-    for _ in range(epoch):
+    for _ in tqdm(range(epoch)):
         indexList = random.sample(range(X.shape[0]), X.shape[0])
         for i in indexList:
             beta = beta - alpha * grad_L(X[i], y[i], beta)
@@ -51,28 +96,28 @@ def train_model_using_stochastic_grad_descent(X, y, alpha=0.1, epoch=500):
     return beta, L_vals
 
 
-def draw(datas, iterations=500):
+def draw(datas, legends, xlabel, ylabel, title):
     # create a new figure
     fig, ax = plt.subplots()
     # Plot each curve on the axes object
     for index, data in enumerate(datas):
-        ax.plot(data, label="Curve " + str(index))
+        ax.plot(data, label=str(legends[index]))
 
     # Add a legend to the axes object
     ax.legend()
 
     # Set the x-axis and y-axis labels
-    ax.set_xlabel('X-axis')
-    ax.set_ylabel('Y-axis')
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
 
     # Set the title of the figure
-    ax.set_title('Multiple curves in one figure')
+    ax.set_title(title)
 
     # Display the figure
     plt.show()
 
 
-if __name__ == '__main__':
+def breast_cancer_classification():
     # load cancer data
     cancer_data = load_breast_cancer()
     X_train, X_val, y_train, y_val = sk.model_selection.train_test_split(cancer_data.data, cancer_data.target,
@@ -87,40 +132,132 @@ if __name__ == '__main__':
     # for each learning rate. So, one single figure will contain several curves, comparing several different learning
     # rates. What did you find to be the best learning rate when using gradient descent? How many iterations are
     # required until the gradient descent method has converged?
-
     """
-    The best learning rate should be 0.9 because it converges faster than other rates. 
-    Approximately, it needs 150 iterations to converge based on the graph.
+    The best learning rates among (0.1, 0.05, 0.025, 0.0125, 0.00625) should be 0.1 because it converges faster than others. 
+    Approximately, it needs 200 iterations to converge based on my graph.
     """
 
     max_iter = 500
-    beta1, L_vals_1 = train_model_using_grad_descent(X_train, y_train, 0.9, max_iter)
-    beta2, L_vals_2 = train_model_using_grad_descent(X_train, y_train, 0.6, max_iter)
-    beta3, L_vals_3 = train_model_using_grad_descent(X_train, y_train, 0.3, max_iter)
-    beta4, L_vals_4 = train_model_using_grad_descent(X_train, y_train, 0.1, max_iter)
-    beta5, L_vals_5 = train_model_using_grad_descent(X_train, y_train, 0.01, max_iter)
-    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], max_iter)
+    learningRates = [0.1, 0.05, 0.025, 0.0125, 0.00625]
+    beta1, L_vals_1 = train_model_using_grad_descent(X_train, y_train, learningRates[0], max_iter)
+    beta2, L_vals_2 = train_model_using_grad_descent(X_train, y_train, learningRates[1], max_iter)
+    beta3, L_vals_3 = train_model_using_grad_descent(X_train, y_train, learningRates[2], max_iter)
+    beta4, L_vals_4 = train_model_using_grad_descent(X_train, y_train, learningRates[3], max_iter)
+    beta5, L_vals_5 = train_model_using_grad_descent(X_train, y_train, learningRates[4], max_iter)
+    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], learningRates, "iterations", "cost function value",
+         "gradient descent")
 
-    beta1, L_vals_1 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.9, max_iter)
-    beta2, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.6, max_iter)
-    beta3, L_vals_3 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.3, max_iter)
-    beta4, L_vals_4 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.1, max_iter)
-    beta5, L_vals_5 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.01, max_iter)
-    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], max_iter)
-
-    # 1.b Try several different learning rates for the stochastic gradient method. Make a plot of the cost function
+    # 1.b
+    # Try several different learning rates for the stochastic gradient method. Make a plot of the cost function
     # value vs. epoch for each learning rate. So, one single figure will contain several curves, comparing several
     # different learning rates. What was the best learning rate when using the stochastic gradient method? How many
     # epochs are required until the stochastic gradient method has converged?
+    """
+        The best learning rates among (0.1, 0.05, 0.025, 0.0125, 0.00625) should be 0.1 because it converges faster than others. 
+        Approximately, it needs 400 epochs to converge based on the graph.
+    """
 
-    beta = train_model_using_grad_descent(X_train, y_train, alpha=0.01, max_iter=50)
-    y_pred = [1 if _ > 0.5 else 0 for _ in sigmoid(Xhat(X_val) @ beta)]
-    acc = np.average(y_pred == y_val)
-    print(acc)
+    beta1, L_vals_1 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[0], max_iter)
+    beta2, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[1], max_iter)
+    beta3, L_vals_3 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[2], max_iter)
+    beta4, L_vals_4 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[3], max_iter)
+    beta5, L_vals_5 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[4], max_iter)
+    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], learningRates, "epochs", "cost function value",
+         "stochastic gradient method")
 
-# Make a plot that shows the cost function value vs. iteration for gradient descent, using the best learning rate
-# that you found for gradient descent. In the same figure, plot the cost function value vs. epoch for the stochastic
-# gradient method, using the best learning rate that you found for the stochastic gradient method. Which method
-# converges faster? Do both methods eventually find a minimizer for the cost function?
+    # 1.c
+    # Make a plot that shows the cost function value vs. iteration for gradient descent, using the best learning rate
+    # that you found for gradient descent. In the same figure, plot the cost function value vs. epoch for the stochastic
+    # gradient method, using the best learning rate that you found for the stochastic gradient method. Which method
+    # converges faster? Do both methods eventually find a minimizer for the cost function?
+    """
+        Stochastic gradient method starts to converge after 50 epochs and gradient method needs to reach 150 iterations for
+        converging. Thus stochastic gradient method converges faster than gradient method. 
+        And both methods eventually find a minimizer beta for cost function.
+    """
 
-# Report your classification accuracy on the validation dataset.
+    betaG, L_vals_1 = train_model_using_grad_descent(X_train, y_train, learningRates[0], max_iter)
+    betaSG, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[0], max_iter)
+    draw([L_vals_1, L_vals_2], ["gradient", "stochastic gradient"], "iterations", "cost function value",
+         "gradient VS stochastic gradient (learning rate = 0.1)")
+
+    # 1.d
+    # Report your classification accuracy on the validation dataset.
+    """
+        Gradient descent's accuracy:  0.9824561403508771  
+        Stochastic gradient descent accuracy 0.9649122807017544
+    """
+
+    y_pred_G = [1 if _ > 0.5 else 0 for _ in sigmoid(Xhat(X_val) @ betaG)]
+    y_pred_SG = [1 if _ > 0.5 else 0 for _ in sigmoid(Xhat(X_val) @ betaSG)]
+    print("Gradient descent's accuracy: ", str(np.average(y_pred_G == y_val)),
+          " Stochastic gradient descent accuracy", str(np.average(y_pred_SG == y_val)))
+
+
+def digit_classification():
+    mnist_data = sk.datasets.fetch_openml('mnist_784')
+    X_train, X_val, y_train, y_val = sk.model_selection.train_test_split(np.array(mnist_data.data).astype("float64"),
+                                                                         np.array(mnist_data.target.astype("int64")),
+                                                                         test_size=10000)
+    X_train /= 255.0
+    X_val /= 255.0
+
+    # Convert y_train and y_val
+    y_train_prob = np.zeros((len(y_train), 10))
+    y_train_prob[np.arange(len(y_train)), y_train] = 1
+
+    # 2.a
+    # Try several different learning rates for the stochastic gradient method. Make a plot of the cost function value
+    # vs. epoch for each learning rate. So, one single figure will contain several curves, comparing several
+    # different learning rates. What was the best learning rate when using the stochastic gradient method? How many
+    # epochs are required until the stochastic gradient method has converged?
+    """
+    The best learning rate among 0,2, 0.05, and 0.01 is 0.01. It converges at 10 epochs, which is faster than others.
+    """
+    max_iter = 20
+    learningRates = [0.2, 0.05, 0.01]
+    beta0, L_vals_0 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[0], max_iter)
+    beta1, L_vals_1 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[1], max_iter)
+    beta2, L_vals_2 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[2], max_iter)
+    draw([L_vals_0, L_vals_1, L_vals_2], learningRates, "epochs", "cost function value",
+         "stochastic gradient method")
+
+    # 2.b
+    # Report your classification accuracy on the validation dataset.
+    """
+    Stochastic gradient descent's accuracy (learning rate: 0.01): 0.9225
+    """
+    y_pred = [np.argmax(yi) for yi in (Xhat(X_val) @ beta2)]
+    print("Stochastic gradient descent's accuracy (learning rate: 0.01): ",
+          str(np.average(y_pred == y_val)))
+
+    # 2.c
+    # In a single figure, display the 8 images which most confused your model. ("Confused" means that your model was
+    # confident in its prediction, but also wrong.) Comment on why these images are confusing.
+    """
+    These images are confusing because they are very similar to others digits. Model makes wrong classification
+    to the similar ones. For example, ID 3253 digit is nine but the little circle in "9" is relatively small,
+    which makes it has a similar shape as "7" so my model classified it as "7" instead of "9". Another example
+    ID 195 digit, which is "7" but has a weird horizontal line across the middle of digit. That line confused 
+    my model to classify it as "2".
+    """
+    y_pred_prob = np.array([softmax(x) for x in (Xhat(X_val) @ beta2)])
+    confusedImageIds = np.array([index for index, x in enumerate(y_pred == y_val) if x == 0])
+    imageCounts = 8
+    mostConfusedIds = confusedImageIds[
+        np.argpartition(np.array([np.max(x) for x in y_pred_prob[confusedImageIds]]), -imageCounts)[-imageCounts:]]
+
+    # plot the images
+    fig, axs = plt.subplots(nrows=4, ncols=2, figsize=(10, 20))
+    for i, ax in zip(mostConfusedIds, axs.flatten()):
+        # plot the image as a grayscale array
+        ax.imshow(X_val[i].reshape(28, 28), cmap='gray')
+        # label the image with its ID
+        ax.text(0, -3, f"ID: {i} " + "pred: " + str(y_pred[i]) + " conf: " + f"{np.max(y_pred_prob[i]) * 100:.4f}%",
+                fontsize=15, color='b')
+    plt.show()
+
+
+if __name__ == '__main__':
+    # breast_cancer_classification()
+    digit_classification()
