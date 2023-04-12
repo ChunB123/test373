@@ -9,13 +9,13 @@ import random
 
 
 def sigmoid(u):
+    # use identity to prevent overflow
     if isinstance(u, (int, float)):
         if u >= 0:
             return 1.0 / (1.0 + np.exp(-u))
         else:
             return np.exp(u) / (1.0 + np.exp(u))
     else:
-        # use identity to prevent overflow
         positive_mask = u >= 0
         output = np.array([0 for x in range(len(u))]).astype("float64")
         output[positive_mask] = 1 / (1 + np.exp(-u[positive_mask]))
@@ -30,6 +30,7 @@ def softmax(u):
 
 
 def binary_cross_entropy(p, q, eps=1e-10):
+    # prevent ln(0)
     q = np.clip(q, eps, 1 - eps)
     return -p * np.log(q) - (1 - p) * np.log(1 - q)
 
@@ -133,18 +134,20 @@ def breast_cancer_classification():
     # rates. What did you find to be the best learning rate when using gradient descent? How many iterations are
     # required until the gradient descent method has converged?
     """
-    The best learning rates among (0.1, 0.05, 0.025, 0.0125, 0.00625) should be 0.1 because it converges faster than others. 
-    Approximately, it needs 200 iterations to converge based on my graph.
+    The best learning rates among [0.1, 0.05, 0.025, 0.0125, 0.00625] should be 0.1 
+    because it converges faster than others and get the lowest value of cost function. 
+    Approximately, it needs 300 iterations to converge based on my graph.
     """
 
     max_iter = 500
-    learningRates = [0.1, 0.05, 0.025, 0.0125, 0.00625]
-    beta1, L_vals_1 = train_model_using_grad_descent(X_train, y_train, learningRates[0], max_iter)
-    beta2, L_vals_2 = train_model_using_grad_descent(X_train, y_train, learningRates[1], max_iter)
-    beta3, L_vals_3 = train_model_using_grad_descent(X_train, y_train, learningRates[2], max_iter)
-    beta4, L_vals_4 = train_model_using_grad_descent(X_train, y_train, learningRates[3], max_iter)
-    beta5, L_vals_5 = train_model_using_grad_descent(X_train, y_train, learningRates[4], max_iter)
-    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], learningRates, "iterations", "cost function value",
+    learningRates_G = [0.1, 0.05, 0.025, 0.0125, 0.00625]
+    betas_G = []
+    L_vals_G = []
+    for lr in learningRates_G:
+        beta, L_vals = train_model_using_grad_descent(X_train, y_train, lr, max_iter)
+        betas_G.append(beta)
+        L_vals_G.append(L_vals)
+    draw(L_vals_G, learningRates_G, "iterations", "cost function value",
          "gradient descent")
 
     # 1.b
@@ -153,16 +156,18 @@ def breast_cancer_classification():
     # different learning rates. What was the best learning rate when using the stochastic gradient method? How many
     # epochs are required until the stochastic gradient method has converged?
     """
-        The best learning rates among (0.1, 0.05, 0.025, 0.0125, 0.00625) should be 0.1 because it converges faster than others. 
-        Approximately, it needs 400 epochs to converge based on the graph.
+    The best learning rates among [0.1, 0.05, 0.025, 0.0125, 0.00625] should be 0.1 
+    because it converges faster than others and get the lowest value of cost function. 
+    Approximately, it needs 400 epochs to converge .
     """
-
-    beta1, L_vals_1 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[0], max_iter)
-    beta2, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[1], max_iter)
-    beta3, L_vals_3 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[2], max_iter)
-    beta4, L_vals_4 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[3], max_iter)
-    beta5, L_vals_5 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[4], max_iter)
-    draw([L_vals_1, L_vals_2, L_vals_3, L_vals_4, L_vals_5], learningRates, "epochs", "cost function value",
+    learningRates_SG = [0.1, 0.05, 0.025, 0.0125, 0.00625]
+    betas_SG = []
+    L_vals_SG = []
+    for lr in learningRates_SG:
+        beta, L_vals = train_model_using_stochastic_grad_descent(X_train, y_train, lr, max_iter)
+        betas_SG.append(beta)
+        L_vals_SG.append(L_vals)
+    draw(L_vals_SG, learningRates_SG, "epochs", "cost function value",
          "stochastic gradient method")
 
     # 1.c
@@ -171,21 +176,23 @@ def breast_cancer_classification():
     # gradient method, using the best learning rate that you found for the stochastic gradient method. Which method
     # converges faster? Do both methods eventually find a minimizer for the cost function?
     """
-        Stochastic gradient method starts to converge after 50 epochs and gradient method needs to reach 150 iterations for
-        converging. Thus stochastic gradient method converges faster than gradient method. 
-        And both methods eventually find a minimizer beta for cost function.
+    Stochastic gradient method starts to converge after 100 epochs 
+    and gradient method needs 300 iterations. Thus stochastic gradient method 
+    converges faster than gradient method. 
+    And both methods eventually find a minimizer beta for cost function 
+    and the beta found by Stochastic gradient method leads to a lower value of cost function.
     """
 
-    betaG, L_vals_1 = train_model_using_grad_descent(X_train, y_train, learningRates[0], max_iter)
-    betaSG, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, learningRates[0], max_iter)
+    betaG, L_vals_1 = train_model_using_grad_descent(X_train, y_train, 0.1, max_iter)
+    betaSG, L_vals_2 = train_model_using_stochastic_grad_descent(X_train, y_train, 0.1, max_iter)
     draw([L_vals_1, L_vals_2], ["gradient", "stochastic gradient"], "iterations", "cost function value",
-         "gradient VS stochastic gradient (learning rate = 0.1)")
+         "gradient (lr=10) VS stochastic gradient (lr=0.1)")
 
     # 1.d
     # Report your classification accuracy on the validation dataset.
     """
-        Gradient descent's accuracy:  0.9824561403508771  
-        Stochastic gradient descent accuracy 0.9649122807017544
+    Gradient descent's accuracy:  0.9736842105263158  
+    Stochastic gradient descent accuracy 0.9473684210526315
     """
 
     y_pred_G = [1 if _ > 0.5 else 0 for _ in sigmoid(Xhat(X_val) @ betaG)]
@@ -202,9 +209,9 @@ def digit_classification():
     X_train /= 255.0
     X_val /= 255.0
 
-    # Convert y_train and y_val
-    y_train_prob = np.zeros((len(y_train), 10))
-    y_train_prob[np.arange(len(y_train)), y_train] = 1
+    # Hot encoding y_train
+    y_train_he = np.zeros((len(y_train), 10))
+    y_train_he[np.arange(len(y_train)), y_train] = 1
 
     # 2.a
     # Try several different learning rates for the stochastic gradient method. Make a plot of the cost function value
@@ -212,13 +219,14 @@ def digit_classification():
     # different learning rates. What was the best learning rate when using the stochastic gradient method? How many
     # epochs are required until the stochastic gradient method has converged?
     """
-    The best learning rate among 0,2, 0.05, and 0.01 is 0.01. It converges at 10 epochs, which is faster than others.
+    The best learning rate among [0,2, 0.05, 0.01] is 0.01. 
+    It converges after 10 epochs, which is faster than others.
     """
     max_iter = 20
     learningRates = [0.2, 0.05, 0.01]
-    beta0, L_vals_0 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[0], max_iter)
-    beta1, L_vals_1 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[1], max_iter)
-    beta2, L_vals_2 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_prob, learningRates[2], max_iter)
+    beta0, L_vals_0 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_he, learningRates[0], max_iter)
+    beta1, L_vals_1 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_he, learningRates[1], max_iter)
+    beta2, L_vals_2 = train_model_using_stochastic_grad_descent_multi(X_train, y_train_he, learningRates[2], max_iter)
     draw([L_vals_0, L_vals_1, L_vals_2], learningRates, "epochs", "cost function value",
          "stochastic gradient method")
 
@@ -247,7 +255,7 @@ def digit_classification():
     mostConfusedIds = confusedImageIds[
         np.argpartition(np.array([np.max(x) for x in y_pred_prob[confusedImageIds]]), -imageCounts)[-imageCounts:]]
 
-    # plot the images
+    # plot eight images
     fig, axs = plt.subplots(nrows=4, ncols=2, figsize=(10, 20))
     for i, ax in zip(mostConfusedIds, axs.flatten()):
         # plot the image as a grayscale array
@@ -259,5 +267,5 @@ def digit_classification():
 
 
 if __name__ == '__main__':
-    # breast_cancer_classification()
+    breast_cancer_classification()
     digit_classification()
